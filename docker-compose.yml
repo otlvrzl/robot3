@@ -1,0 +1,80 @@
+
+# "x-" blocks are reusable templates. &ros-common names it, "<<: *ros-common" reuses it,
+# so the settings below are written once and shared by the services `sim` and `shell`.
+x-ros-common: &ros-common
+  image: robot2-ros:jazzy          # the name given to the image built from our Dockerfile
+  build:
+    context: .                     # build using the Dockerfile in this folder
+    args:
+      # Your real user ID, written to .env by setup.sh (falls back to 1000).
+      USER_UID: ${HOST_UID:-1000}
+      USER_GID: ${HOST_GID:-1000}
+  # Share the host's network. Simplest way for ROS 2 programs and the GUI to find each other.
+  network_mode: host
+  environment:
+    # Which screen to draw windows on (same as on your host).
+    - DISPLAY=${DISPLAY:-:0}
+    - QT_X11_NO_MITSHM=1
+    # Set SOFTWARE_RENDER=1 in .env if Gazebo/RViz show graphics errors.
+    - SOFTWARE_RENDER=${SOFTWARE_RENDER:-0}
+    - GZ_IP=${GZ_IP:-127.0.0.1}
+    - GZ_PARTITION=${GZ_PARTITION:-default}
+    - LDS_MODEL=LDS-01
+  volumes:
+    # Lets the container draw windows on your screen (the X11 display socket).
+    - /tmp/.X11-unix:/tmp/.X11-unix:rw
+    # YOUR CODE: the host folder ./src appears as /ws/src in the container.
+    # Edit on the host, run in the container. Your files never live only inside Docker.
+    - ./src:/ws/src
+    # Build output goes into Docker-managed volumes (see bottom of file), not into your
+    # project folder, so git never sees it and your folder stays clean.
+    - ros_build:/ws/build
+    - ros_install:/ws/install
+    - ros_log:/ws/log
+    - ./nav2_params_jazzy.yaml:/ws/nav2_params_jazzy.yaml
+  # Give the container access to the graphics card (Intel/AMD) for fast 3D.
+  # If /dev/dri does not exist on your computer, delete the next 2 lines.
+  devices:
+    - /dev/dri:/dev/dri
+  # Allow the container user to use the graphics devices (group IDs come from .env).
+  group_add:
+    - "${VIDEO_GID:-44}"
+    - "${RENDER_GID:-992}"
+  # NVIDIA GPU: install nvidia-container-toolkit on the host, then uncomment:
+  # deploy:
+  #   resources:
+  #     reservations:
+  #       devices:
+  #         - driver: nvidia
+  #           count: all
+  #           capabilities: [gpu]
+  stdin_open: true   # keep the keyboard connected (needed for interactive terminals)
+  tty: true
+
+services:
+  # `docker compose up sim`: builds your package, then starts Gazebo + RViz + the robot.
+  sim:
+    <<: *ros-common
+    command: >
+      bash -c "colcon build --symlink-install &&
+      source install/setup.bash &&
+      ros2 launch turtlebot3_gazebo turtlebot3_world.launch.py &
+      sleep 15 &&
+      ros2 launch slam_toolbox online_async_launch.py use_sim_time:=True &
+      sleep 3 &&
+      ros2 launch nav2_bringup navigation_launch.py use_sim_time:=True params_file:=/ws/nav2_params_jazzy.yaml &
+      sleep 3 &&
+      ros2 launch nav2_bringup rviz_launch.py"
+
+  # `docker compose run --rm shell`: an interactive terminal in the same environment,
+  # handy for commands like `ros2 topic list`. Only starts when you ask for it.
+  shell:
+    <<: *ros-common
+    command: bash
+    profiles: ["tools"]
+
+# Named storage areas managed by Docker (for the build output mentioned above).
+volumes:
+  ros_build:
+  ros_install:
+  ros_log:
