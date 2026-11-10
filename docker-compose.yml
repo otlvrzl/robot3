@@ -2,7 +2,7 @@
 # "x-" blocks are reusable templates. &ros-common names it, "<<: *ros-common" reuses it,
 # so the settings below are written once and shared by the services `sim` and `shell`.
 x-ros-common: &ros-common
-  image: robot2-ros:jazzy          # the name given to the image built from our Dockerfile
+  image: robot3-ros:jazzy          # the name given to the image built from our Dockerfile
   build:
     context: .                     # build using the Dockerfile in this folder
     args:
