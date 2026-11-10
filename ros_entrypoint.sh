@@ -11,7 +11,6 @@ fi
 # "Source" the ROS 2 installation: this makes commands like `ros2` available.
 source /opt/ros/jazzy/setup.bash
 
-# If our own workspace has been built, load it too, so ROS can find the simple_bot package.
 if [ -f /ws/install/setup.bash ]; then
   source /ws/install/setup.bash
 fi
